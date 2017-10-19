@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title></title>
+    <style type="text/css">
+        body {
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+<canvas></canvas>
+<div style="display:none;">
+    <img id="bacon" src="images/bacon.svg"
+         width="300" height="227">
+    <img id="broccoli" src="images/broccoli.svg"
+    width="300" height="227">
+    <img id="banana" src="images/banana.svg"
+    width="300" height="227">
+    <img id="chicken" src="images/chicken-leg.svg">
+    <img id="emoji" src="images/emoji.png">
+</div>
+<script src="simple-noise.js"></script>
+
+<script>
+    window.AudioContext=window.AudioContext||window.webkitAudioContext||window.mozAudioContext; // pour que ce soit supporté par tout les navigateurs
+
+    var canvasWith = window.innerWidth;
+    var canvasHeight = window.innerHeight;
+    var x =0;
+    var radius = 80
+    var time = 50
+    var cercles =[]
+    var cercles2 =[]
+    var cerclescercles = []
+    var simplex = new SimplexNoise()
+    var amplitude = 50
+    var opacity = 0.7
+    var squares =[];
+    var squareW = 100; // à faire varier
+    var nbSquares = 32;
+    var aux = 1;
+    var average = 0;
+    var bgcolor='rgba(0,0,0,0.1)';
+
+    //find the sound 
+
+    var son1 = 0;
+    /**
+     *
+     * Sound stuff
+     *
+     */
+    var audioCtx = new AudioContext(); //context
+    var audioBuffer;
+    var audioSource; //mp3
+    var analyser = audioCtx.createAnalyser(); //analyseur
+    var frequencyData = new Uint8Array(analyser.frequencyBinCount);
+    var bacon = document.getElementById("bacon");
+    var broccoli = document.getElementById("broccoli");
+    var chicken = document.getElementById("chicken");
+    var banana = document.getElementById("banana");
+
+    /**
+     Time stuff
+     */
+    var DELTA_TIME = 0;
+    var LAST_TIME = Date.now();
+
+    /**
+     Canvas stuff
+     */
+    var canvas
+    var ctx
+    canvas = document.querySelector('canvas')
+    ctx = canvas.getContext('2d')
+    ctx.fillStyle = 'pink';
+    function initCanvas() {
+        onResize()
+    }
+
+    /**
+     *  load sound
+     */
+    function loadSound(url) {
+        var request = new XMLHttpRequest();
+        request.open('GET', './sounds/sound.mp3', true);
+        request.responseType = 'arraybuffer'; //réponse : données sous forme de tableau
+
+        // Decode asynchronously
+        request.onload = function() {
+
+            audioCtx.decodeAudioData(request.response, function(buffer) {
+
+                // success callback
+                audioBuffer = buffer; //prise de courant
+
+                // Create sound from buffer
+                audioSource = audioCtx.createBufferSource();
+                audioSource.buffer = audioBuffer;
+                audioSource.loop = true;
+
+               // console.log(audioSource.constructor)
+        
+                audioSource.onended = function(){
+                    console.log("End of music");
+                }
+
+                // connect the audio source to context's output
+                audioSource.connect( analyser )
+                analyser.connect( audioCtx.destination )
+
+                // play sound
+                audioSource.start();
+
+                addListeners()
+                frame()
+
+            }, function(){
+
+                // error callback
+                //
+            });
+        }
+        request.send();
+    }
+
+    var Square= function(opts){
+        this.x = opts.x;
+        this.y = opts.y;
+        this.sqWidth = opts.sqWidth;
+        this.sqHeight = opts.sqHeight;
+
+        this.rotation = opts.rotation;
+        this.img = opts.img;
+
+
+        this.color = "rgb("+
+            Math.floor(Math.random()*256)+","+
+            Math.floor(Math.random()*256)+","+
+            Math.floor(Math.random()*250)+")";
+    };
+
+    Square.prototype = {
+        render: function(ctx) {
+
+            ctx.save();
+            ctx.translate( this.x, this.y);
+            ctx.rotate(this.rotation);
+
+            ctx.drawImage( this.img, -this.sqWidth/2, -this.sqHeight/2, this.sqWidth, this.sqHeight);
+
+            ctx.restore();
+        }
+    };
+
+    var Cercle = function(opts){
+        this.x = opts.x;
+        this.y = opts.y;
+        this.cos = opts.cos;
+        this.sin = opts.sin;
+        this.size = opts.size;
+        this.angle = opts.angle
+        this.value2d = 0
+        this.color = "rgb("+
+            Math.floor(Math.random()*256)+","+
+            Math.floor(Math.random()*256)+","+
+            Math.floor(Math.random()*250)+")";
+    };
+
+    Cercle.prototype = {
+        render: function(ctx) { // creation de cercles
+            ctx.save();
+//            ctx.rotate(this.angle);
+//            ctx.fillStyle = this.color;
+            ctx.beginPath();
+            ctx.moveTo( 0, 0 );
+//            ctx.arc(this.x, this.y, 2, 0, 2 * Math.PI, false);
+//            ctx.fill();
+            ctx.closePath();
+            ctx.restore();
+        }
+    };
+
+    var nbPoints;
+    var step;
+    function draw(cerclesArr, nbPoints){
+        step = (Math.PI*2) / nbPoints;
+        for(var i = 0; i < ( Math.PI * 2); i += step ){
+
+            var cercle = new Cercle({
+                x: Math.cos(i) * (radius),
+                y: Math.sin(i) * (radius),
+                cos: Math.cos(i),
+                sin: Math.sin(i),
+                size : 1,
+                angle: i
+            });
+            cerclesArr.push(cercle);
+            cercle.render(ctx);
+        }
+
+    }
+
+    draw(cercles, 300)
+    draw(cercles2, 200)
+
+    function drawLines(cerclesArr, type, color) { //lignes qui relient les points
+
+        ctx.save();
+        ctx.strokeStyle="black";
+        ctx.lineWidth=2;
+        ctx.beginPath();
+        ctx.moveTo(cerclesArr[0].x, cerclesArr[0].y);
+        for (var i = 0; i < cerclesArr.length; i++) {
+
+            ctx.lineTo(cerclesArr[i].x, cerclesArr[i].y);
+        }
+        ctx.closePath();
+        ctx.fillStyle =color;
+        if(type == 1){
+            ctx.stroke();
+        }
+        if(type == 0){
+            ctx.fill();
+        }
+        ctx.restore()
+    }
+
+    //create squares function
+    var reset = false
+
+    //(taille max / nb de carré) * (idCarre + 1)
+    function drawSquares(anim, food){
+        var squarePerRow = Math.floor(canvas.width / (squareW + 100));
+        var squareContainer = (squareW + 100) * squarePerRow;
+        var step = squareContainer/squarePerRow;
+        var margin = (canvas.width - squareContainer) / 2 + (squareW+100)/2;
+    
+        for(var k = 0; k < nbSquares; k ++){
+            var x = k%squarePerRow;
+            var y = Math.floor(k/squarePerRow);
+
+            var square= new Square({
+                img:food,
+                x: x*step + margin,
+                y: y*step + margin,
+                sqWidth:squareW,
+                sqHeight:squareW,
+                rotation: anim
+    
+            });
+            squares.push(square);
+            square.render(ctx);
+        }
+    }
+
+    var emojihead= new Square({
+        img:emoji,
+        x: canvasWith/2 - squareW/2,
+        y: canvasHeight/2 - squareW/2,
+        sqWidth:squareW,
+        sqHeight:squareW,
+        rotation: 10
+
+    });
+
+    /**
+     * addListeners
+     */
+    function addListeners() {
+
+        window.addEventListener( 'resize', onResize.bind(this) );
+        rafId = requestAnimationFrame( frame )
+    }
+
+    /**
+     * update
+     * - Triggered on every TweenMax tick
+     */
+    function frame() {
+
+        rafId = requestAnimationFrame( frame )
+        var cumul = 0;
+
+
+        DELTA_TIME = Date.now() - LAST_TIME;
+        LAST_TIME = Date.now();
+
+        analyser.getByteFrequencyData(frequencyData);
+
+        ctx.fillStyle=bgcolor;
+        ctx.fillRect( 0, 0, canvas.width, canvas.height );
+//        ctx.clearRect( 0, 0, canvas.width, canvas.width );
+
+        time += 0.001
+
+        //edd animation
+
+        for( var i = 0; i < cercles.length ; i++ ){
+            var cercle = cercles[i]
+            var displacement;
+            displacement = simplex.noise2D(cercle.cos + time, cercle.sin + time) * amplitude + average
+//            var displacement =average
+            cercle.x = canvas.width/2 +  Math.cos(cercle.angle) * (radius*2 + displacement)
+            cercle.y = canvas.height/2 + Math.sin(cercle.angle) * (radius*2 + displacement)
+            //cercle.render(ctx);
+        }
+
+        for( var i = 0; i < cercles2.length ; i++ ){
+            var cercle = cercles2[i]
+            var displacement =average
+            cercle.x = canvas.width/2 +  Math.cos(cercle.angle) * ( radius/4 + displacement)
+            cercle.y = canvas.height/2 + Math.sin(cercle.angle) * ( radius/4 + displacement)
+            cercle.render(ctx);
+        }
+
+        var petale= "white";
+        var color = "#F27400";
+        var type = 0;
+//
+        //drawLines(cercles, 0, petale); // white egg
+
+        /*if(frequencyData[11]>250) {
+            squareW = 100;
+            drawSquares(time, broccoli)
+        }*/
+       /* if(frequencyData[44]>250) {
+            console.log(":)")
+        }
+        else{
+            squareW = 100;
+            //drawSquares(time, banana)
+        }*/
+
+        //BASSE
+          // if(frequencyIdx < 10 && frequencyData[frequencyIdx] >200){
+          //   console.log(frequencyIdx) // basse
+          // }
+        if(frequencyData[0]>200) {
+            //console.log(":)")
+            squareW = Math.floor(Math.random() * 150) + 100;
+            drawSquares(time, bacon)
+        }
+
+        //SNARE
+        if(frequencyData[291]>150) {
+            //console.log(":)")
+            bgcolor="rgba("+
+            Math.floor(Math.random()*256)+","+
+            Math.floor(Math.random()*256)+","+
+            Math.floor(Math.random()*250)+",0.1)";
+
+            squareW = Math.floor(Math.random() * 300) + 100;
+            drawSquares(time, banana)
+        }
+
+        if(average > 32) {
+            drawLines(cercles, 0, petale); // white egg
+            drawLines(cercles2, type, color); // yellow egg
+        }
+
+        //emojihead.render(ctx);
+
+//            drawLines(cercles2, 1, green);
+        for ( var i = 0; i < cercles.length; i++ ) {
+            // get the frequency according to current i
+            var percentIdx = i /cercles.length;
+            var frequencyIdx = Math.floor(1024 * percentIdx) // array of 1024
+            cumul += frequencyData[frequencyIdx];
+
+        }
+        average = cumul / 255;
+    }
+
+    /**
+     * onResize
+     * - Triggered when window is resized
+     * @param  {obj} evt
+     */
+    function onResize( evt ) {
+
+        canvasWith = window.innerWidth;
+        canvasHeight = window.innerHeight;
+        canvas.width = canvasWith
+        canvas.height = canvasHeight
+        canvas.style.width = canvasWith + 'px'
+        canvas.style.height = canvasHeight + 'px'
+    }
+
+    initCanvas()
+    loadSound()
+
+</script>
+
+</body>
+</html>
